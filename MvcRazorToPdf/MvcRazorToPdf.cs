@@ -5,6 +5,7 @@ using System.Web.Mvc;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using iTextSharp.tool.xml;
+using System.Collections.Generic;
 
 namespace MvcRazorToPdf
 {
@@ -17,7 +18,6 @@ namespace MvcRazorToPdf
             {
                 viewName = context.RouteData.GetRequiredString("action");
             }
-
             context.Controller.ViewData.Model = model;
 
             byte[] output;
@@ -42,6 +42,47 @@ namespace MvcRazorToPdf
                         document.Close();
                         output = workStream.ToArray();
                     }
+                }
+            }
+            return output;
+        }
+
+        public byte[] GeneratePdfOutput(ControllerContext context, IEnumerable<Tuple<string, object>> viewsAndModels,
+            Action<PdfWriter, Document> configureSettings = null)
+        {
+            
+            byte[] output;
+            using (var document = new Document())
+            {
+                using (var workStream = new MemoryStream())
+                {
+                    PdfWriter writer = PdfWriter.GetInstance(document, workStream);
+                    writer.CloseStream = false;
+
+                    if (configureSettings != null)
+                    {
+                        configureSettings(writer, document);
+                    }
+                    document.Open();
+                    foreach(var viewAndModel in viewsAndModels)
+                    {
+                        string viewName;
+                        viewName = viewAndModel.Item1;
+                        if (viewName == null)
+                        {
+                            viewName = context.RouteData.GetRequiredString("action");
+                        }
+
+                        context.Controller.ViewData.Model = viewAndModel.Item2;
+
+                        using (var reader = new StringReader(RenderRazorView(context, viewName)))
+                        {
+                            XMLWorkerHelper.GetInstance().ParseXHtml(writer, document, reader);
+                        }
+                        document.NewPage();
+                    }
+                    document.Close();
+                    output = workStream.ToArray();
                 }
             }
             return output;
